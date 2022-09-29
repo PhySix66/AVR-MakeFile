@@ -1,0 +1,147 @@
+# if this is hashtaged, then the default avr-gcc will be used.
+AVR_GCC_VER=-9.2.0
+
+# Init Vars for Single Compile
+TARGET=atmega328p
+TRGT_MHZ=16
+TRGT_INT=PCINTx
+USB_CFG_IOPORTNAME=D
+USB_CFG_DMINUS_BIT=3
+USB_CFG_DPLUS_BIT=2
+USB_CFG_PULLUP_IOPORTNAME=D
+USB_CFG_PULLUP_BIT=7
+SlowSCK_PORTNAME=D
+SlowSCK_BIT=5
+
+# Init variables for BATCH compiling
+# 2 types of BATCH Compile is implemened.
+# BATCH_TYPE = comb # Only the desired combinations are compiled. Variables can be defined in Column Vars section.
+# BATCH_TYPE = all # All combinations are compiled, regardles of outcome. If ERROR occure during compile, thus no main.hex is generated, so no desttination folder will be created.
+# However!!! When no compile-error is happend, this still doesn't necessarily rolls out a bad PORT/PIN usage. 
+
+BATCH_TYPE = combo
+
+##		------------- Common Batch Vars -------------   ##
+TARGETS = atmega88pa atmega88p atmega168p atmega328p
+TRGT_MHZs = 12 16 18 20
+TRGT_PORTS = B D
+
+##		------------- All Vars -------------   ##
+TRGT_DPLUS_PINS = 0 1 2 3
+TRGT_DMINUS_PINS = 0 1 2 3
+TRGT_INTS = PCINTx ICPx INTx
+USB_CFG_PULLUP_IOPORTNAMES = D
+USB_CFG_PULLUP_BITS = 7
+SlowSCK_PORTNAMES = D
+SlowSCK_BITS = 5
+
+##		------------- Column Vars -------------   ##
+# this is for specific combinations, 1 column == 1 combination
+TRGT_COL_PORTS = B B B D D D D
+TRGT_COL_DPLUS_PINS = 0 1 0 2 3 2 3
+TRGT_COL_DMINUS_PINS = 1 0 1 3 2 3 2
+TRGT_COL_INTS = PCINTx PCINTx ICPx INTx INTx PCINTx PCINTx
+USB_COL_CFG_PULLUP_IOPORTNAME= D D D D D D D
+USB_COL_CFG_PULLUP_BIT= 7 7 7 7 7 7 7
+SlowSCK_COL_PORTNAME= D D D D D D D
+SlowSCK_COL_BIT= 5 5 5 5 5 5 5
+
+# Don't TOUCH these!!!
+##		-----------------------------------------------		##
+USB_INTR_SEL_PRETXT=USB_INTR_TYPE_
+USB_INTR_SEL=$(USB_INTR_SEL_PRETXT)$(TRGT_INT)
+TRGT_PORT=PORT$(USB_CFG_IOPORTNAME)
+TRGT_FILE_NAME=$(TARGET)_$(TRGT_MHZ)Mhz_$(TRGT_PORT)_$(TRGT_INT)
+WS = 1
+
+F_CPU=$(TRGT_MHZ)000000
+CDEFS = -DF_CPU=$(F_CPU)UL
+CDEFS += -DUSB_CFG_IOPORTNAME=$(USB_CFG_IOPORTNAME)
+CDEFS += -DUSB_CFG_DMINUS_BIT=$(USB_CFG_DMINUS_BIT)
+CDEFS += -DUSB_CFG_DPLUS_BIT=$(USB_CFG_DPLUS_BIT)
+CDEFS += -DUSB_INTR_SEL=$(USB_INTR_SEL)
+
+#SUB_DIR_USPASP_PINS="("USB_PULL" "P$(USB_CFG_PULLUP_IOPORTNAME)$(USB_CFG_PULLUP_BIT)")("SLOW" "P$(SlowSCK_PORTNAME)$(SlowSCK_BIT)")"
+SUB_DIR=USB"("D-" "P$(USB_CFG_IOPORTNAME)$(USB_CFG_DMINUS_BIT)")("D+" "P$(USB_CFG_IOPORTNAME)$(USB_CFG_DPLUS_BIT)")"
+BATCH_DIR=Compiled" "Hex" "Files/$(TARGET)/$(TRGT_MHZ)Mhz/USB_PORT$(USB_CFG_IOPORTNAME)/USB_INT_"("$(TRGT_INT)")"/$(SUB_DIR)
+##		-----------------------------------------------		##
+
+CONFIG_FILE = export_config.txt
+
+config: $(CONFIG_FILE)
+	@echo '// Compile Settings for $(TARGET)' > $(CONFIG_FILE)
+	@echo '// Compiler Version	avr-gcc$(AVR_GCC_VER)' >> $(CONFIG_FILE)
+	@echo '// These values are loaded from makefile.' >> $(CONFIG_FILE)
+	@echo '#define	TARGET						$(TARGET)' >> $(CONFIG_FILE)
+	@echo '#define	TRGT_MHZ					$(TRGT_MHZ)' >> $(CONFIG_FILE)
+	@echo '#define	F_CPU:						$(F_CPU)' >> $(CONFIG_FILE)
+	@echo '// USB Settings:	' >> $(CONFIG_FILE)
+	@echo '#define	USB_CFG_IOPORTNAME:			$(USB_CFG_IOPORTNAME)' >> $(CONFIG_FILE)
+	@echo '#define	USB_CFG_DPLUS_BIT:			$(USB_CFG_DPLUS_BIT)' >> $(CONFIG_FILE)
+	@echo '#define	USB_CFG_DMINUS_BIT:			$(USB_CFG_DMINUS_BIT)' >> $(CONFIG_FILE)
+	@echo '#define	USB Interrupt:				$(TRGT_INT)' >> $(CONFIG_FILE)
+	@echo '#define	USB_CFG_PULLUP_IOPORTNAME	$(USB_CFG_PULLUP_IOPORTNAME)'>> $(CONFIG_FILE)
+	@echo '#define	USB_CFG_PULLUP_BIT			$(USB_CFG_PULLUP_BIT)'>> $(CONFIG_FILE)
+	@echo '#define	SlowSCK_PORTNAME			$(SlowSCK_PORTNAME)'>> $(CONFIG_FILE)
+	@echo '#define	SlowSCK_BIT					$(SlowSCK_BIT)'>> $(CONFIG_FILE)
+	@echo '#endif' >> $(CONFIG_FILE)
+
+clean:
+	rm -f main.hex main.lst main.obj main.cof main.list main.map main.eep.hex main.bin *.o main.s usbdrv/*.o
+
+# file targets:
+main.bin:	$(OBJECTS)
+	$(COMPILE) -o main.bin $(OBJECTS) -Wl,-Map,main.map
+
+main.hex:	clean main.bin
+	rm -f main.hex main.eep.hex
+	avr-objcopy -j .text -j .data -O ihex main.bin main.hex
+	@if [ -a main.hex ] ; then \
+	mkdir -p $(BATCH_DIR)/ ;\
+	cp -f main.hex $(BATCH_DIR)/main.hex ;\
+	cp -f main.hex $(BATCH_DIR)/$(TRGT_FILE_NAME).hex ;\
+	fi;
+
+# build_ws is needed for $(word $(WS), $(array))-s $(WS) "bypass".
+build_ws:
+	make main.hex USB_CFG_IOPORTNAME=$(word $(WS), $(TRGT_COL_PORTS)) USB_CFG_DPLUS_BIT=$(word $(WS), $(TRGT_COL_DPLUS_PINS)) USB_CFG_DMINUS_BIT=$(word $(WS), $(TRGT_COL_DMINUS_PINS)) TRGT_INT=$(word $(WS), $(TRGT_COL_INTS))
+
+build_batch:
+	@n=1; \
+	for target in $(TARGETS); do \
+		for clk in $(TRGT_MHZs); do \
+			if [ $(BATCH_TYPE) = "all" ]; then \
+				for port in $(TRGT_PORTS); do \
+					for dp in $(TRGT_DPLUS_PINS); do \
+						for dm in $(TRGT_DMINUS_PINS); do \
+							for int in $(TRGT_INTS); do \
+								#echo $$n $(BATCH_TYPE) "$$target" "$$clk" ;\
+								make main.hex TARGET="$$target" TRGT_MHZ="$$clk" F_CPU="$$clk"000000 USB_CFG_IOPORTNAME="$$port" USB_CFG_DPLUS_BIT="$$dp" USB_CFG_DMINUS_BIT="$$dm" TRGT_INT="$$int";\
+								n=`expr $$n + 1`; \
+							done \
+						done \
+					done \
+				done \
+			elif [ $(BATCH_TYPE) = "combo" ]; then \
+				((n=1)) ; \
+				for p in $(TRGT_COL_PORTS); do \
+					make build_ws TARGET="$$target" TRGT_MHZ="$$clk" F_CPU="$$clk"000000 WS="$$n";\
+					((n=$$n + 1)); \
+				done ; \
+			fi; \
+		done \
+	done
+
+
+##		-----------------------------------------------		##
+ # https://github.com/PhySix66/MCU_PreCompiled_DateTime
+VERSION_FILE = version.h
+
+version: $(VERSION_FILE)
+	@echo '#ifndef		_VERSION_H_' > $(VERSION_FILE) 
+	@echo '#define		_VERSION_H_' >> $(VERSION_FILE)
+	@echo '#include	<avr/pgmspace.h>' >> $(VERSION_FILE) 
+	@echo '//data from date_precompiled.exe' >> $(VERSION_FILE)
+	@DateTime_PreCompiled >> $(VERSION_FILE)
+	@echo '#endif' >> $(VERSION_FILE)
+##		-----------------------------------------------		##
